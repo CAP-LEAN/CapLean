@@ -1,0 +1,6 @@
+name = "CapLean"
+version = "0.1.0"
+defaultTargets = ["CapLean"]
+
+[[lean_lib]]
+name = "CapLean"
