@@ -22,12 +22,13 @@ This is the "alphabet" of the free monad -- every effectful action
 the agent can take is one of these constructors.
 -/
 inductive AgentOp : Type where
-  | readFile    : FilePath → AgentOp
-  | writeFile   : FilePath → String → AgentOp
-  | execShell   : Cmd → List String → AgentOp
-  | evalCode    : CodeSnippet → AgentOp
-  | installPkg  : PkgName → AgentOp
-  | networkCall : URL → AgentOp
+  | readFile       : FilePath → AgentOp
+  | writeFile      : FilePath → String → AgentOp
+  | execShell      : Cmd → List String → AgentOp
+  | evalCode       : CodeSnippet → AgentOp
+  | installPkg     : PkgName → AgentOp
+  | networkCall    : URL → AgentOp
+  | explicitApprove : PkgName → AgentOp
   deriving Repr, DecidableEq, BEq
 
 end CapLean
