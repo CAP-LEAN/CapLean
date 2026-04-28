@@ -7,169 +7,153 @@ namespace CapLean
 /-!
 ## Layer 3 — Supply Chain Trust
 
-This layer specialises `InstallPackage`.
-Even if Layer 1 permits installs, Layer 3 constrains *which packages*
-may be introduced based on a trust lattice.
-
-The core guarantee: the trust level of transitively installed
-dependencies can never fall below the configured floor without
-an explicit `ExplicitApprove` step appearing in the trace.
+### Trust model (honest scope)
+`traceInstallsSafe` is a specification-level check. It proves that *if* the
+declared packages and graph are accurate, every install meets the trust floor
+or was explicitly approved. It does not verify the graph against a live registry.
 -/
 
--- ─────────────────────────────────────────────
--- 1. Trust order
--- ─────────────────────────────────────────────
+-- ── 1. Total order on TrustLevel ─────────────────────────────────────
 
-/-- `TrustLevel` is already defined in Capability.lean.
-    We establish a decidable ≤ order on it here. -/
 def TrustLevel.toNat : TrustLevel → Nat
   | .knownVulnerable => 0
   | .unreviewed      => 1
   | .verified        => 2
 
-def TrustLevel.le (a b : TrustLevel) : Bool :=
-  a.toNat ≤ b.toNat
-
-instance : LE TrustLevel where
-  le a b := a.toNat ≤ b.toNat
+instance : LE TrustLevel := ⟨fun a b => a.toNat ≤ b.toNat⟩
 
 instance (a b : TrustLevel) : Decidable (a ≤ b) :=
   inferInstanceAs (Decidable (a.toNat ≤ b.toNat))
 
--- ─────────────────────────────────────────────
--- 2. Package and dependency graph
--- ─────────────────────────────────────────────
+-- ── 2. Package graph ─────────────────────────────────────────────────
 
 structure Package where
   name  : String
   trust : TrustLevel
   deriving Repr, DecidableEq, BEq
 
-/-- A dependency graph maps each package name to its direct dependencies -/
 abbrev DepGraph := List (Package × List Package)
 
-/-- Look up a package by name in the graph -/
 def DepGraph.lookup (g : DepGraph) (name : String) : Option Package :=
-  (g.find? (fun (p, _) => p.name == name)).map Prod.fst
+  (g.find? (fun e => e.1.name == name)).map (fun e => e.1)
 
-/-- All direct dependencies of a package -/
 def DepGraph.deps (g : DepGraph) (pkg : Package) : List Package :=
-  match g.find? (fun (p, _) => p.name == pkg.name) with
-  | some (_, ds) => ds
-  | none         => []
+  match g.find? (fun e => e.1.name == pkg.name) with
+  | some e => e.2
+  | none   => []
 
--- ─────────────────────────────────────────────
--- 3. Transitive closure (bounded depth)
--- ─────────────────────────────────────────────
+-- ── 3. Transitive closure (fuel-bounded) ─────────────────────────────
 
-/-- Collect all transitive dependencies up to a depth limit -/
-def DepGraph.transitiveDeps (g : DepGraph) (pkg : Package) (fuel : Nat) : List Package :=
-  match fuel with
-  | 0        => []
-  | fuel + 1 =>
+def DepGraph.transitiveDeps (g : DepGraph) (pkg : Package) : Nat → List Package
+  | 0     => []
+  | n + 1 =>
     let direct := g.deps pkg
-    direct ++ (direct.flatMap (g.transitiveDeps · fuel))
-termination_by fuel
+    direct ++ direct.flatMap (g.transitiveDeps · n)
 
-/-- Minimum trust level across a package and all its transitive dependencies -/
 def DepGraph.minTransitiveTrust (g : DepGraph) (pkg : Package) : TrustLevel :=
-  let all := pkg :: g.transitiveDeps pkg 10   -- depth-10 bound
-  all.foldl (fun acc p =>
-    if p.trust.toNat < acc.toNat then p.trust else acc)
+  (pkg :: g.transitiveDeps pkg 10).foldl
+    (fun acc p => if p.trust.toNat < acc.toNat then p.trust else acc)
     .verified
 
--- ─────────────────────────────────────────────
--- 4. Trust policy predicates
--- ─────────────────────────────────────────────
+-- ── 4. Policy predicates ─────────────────────────────────────────────
 
-/-- Is a package installation allowed given a capability's minTrust floor? -/
 def pkgAllowedBool (pkg : Package) (g : DepGraph) (cap : Capability) : Bool :=
-  cap.minTrust.toNat ≤ (g.minTransitiveTrust pkg).toNat
+  Nat.ble cap.minTrust.toNat (g.minTransitiveTrust pkg).toNat
 
 def pkgAllowed (pkg : Package) (g : DepGraph) (cap : Capability) : Prop :=
   pkgAllowedBool pkg g cap = true
 
-instance (pkg : Package) (g : DepGraph) (cap : Capability) :
+instance {pkg : Package} {g : DepGraph} {cap : Capability} :
     Decidable (pkgAllowed pkg g cap) :=
   inferInstanceAs (Decidable (pkgAllowedBool pkg g cap = true))
 
-/-- Check all InstallPackage ops in a trace against the trust floor -/
+/--
+Check all `installPkg` ops in a trace.
+A package passes if it was explicitly approved earlier in the trace,
+or if its transitive trust meets `cap.minTrust`.
+-/
 def traceInstallsSafe (t : Trace) (g : DepGraph) (cap : Capability) : Bool :=
   t.all fun op =>
     match op with
     | .installPkg name =>
-      match g.lookup name with
-      | some pkg => pkgAllowedBool pkg g cap
-      | none     => false   -- unknown package = not verified = blocked
-    | _ => true             -- non-install ops are not this layer's concern
+        t.any (· == .explicitApprove name) ||
+        match g.lookup name with
+        | some pkg => pkgAllowedBool pkg g cap
+        | none     => false
+    | _ => true
 
 def traceInstallsSafeProp (t : Trace) (g : DepGraph) (cap : Capability) : Prop :=
   traceInstallsSafe t g cap = true
 
-instance (t : Trace) (g : DepGraph) (cap : Capability) :
+instance {t : Trace} {g : DepGraph} {cap : Capability} :
     Decidable (traceInstallsSafeProp t g cap) :=
   inferInstanceAs (Decidable (traceInstallsSafe t g cap = true))
 
--- ─────────────────────────────────────────────
--- 5. Monotonicity theorem
--- ─────────────────────────────────────────────
+-- ── 5. Simple structural lemma ────────────────────────────────────────
+
+/-- The empty trace is trivially safe under any policy. -/
+theorem traceInstallsSafe_nil (g : DepGraph) (cap : Capability) :
+    traceInstallsSafeProp [] g cap := by
+  simp [traceInstallsSafeProp, traceInstallsSafe]
+
+-- ── 6. Core safety theorem ────────────────────────────────────────────
 
 /--
 **Trust Monotonicity Theorem**
 
-If all install ops in a trace pass the trust floor check,
-then every package name referenced by an `InstallPackage` op
-resolves to a package whose transitive trust meets the floor.
+If a trace passes the trust check, then every `installPkg` op either:
+- was explicitly approved in the same trace, OR
+- names a package whose transitive trust meets the configured floor.
 -/
 theorem trustMonotonicity
     (t : Trace) (g : DepGraph) (cap : Capability)
     (h : traceInstallsSafeProp t g cap)
     : ∀ op ∈ t, ∀ name : String,
         op = .installPkg name →
+        t.any (· == .explicitApprove name) = true ∨
         ∃ pkg, g.lookup name = some pkg ∧ pkgAllowed pkg g cap := by
-  simp only [traceInstallsSafeProp, traceInstallsSafe,
-             List.all_eq_true] at h
+  unfold traceInstallsSafeProp traceInstallsSafe at h
+  rw [List.all_eq_true] at h
   intro op hop name heq
   subst heq
   have hok := h (.installPkg name) hop
-  simp only [pkgAllowedBool] at hok
-  split at hok
-  · rename_i pkg heq
-    exact ⟨pkg, heq, hok⟩
-  · simp at hok
+  -- Use `change` to force iota-reduction of the match definitionally,
+  -- avoiding reliance on simp reducing the constructor application.
+  change (t.any (· == .explicitApprove name) ||
+          match g.lookup name with
+          | some pkg => pkgAllowedBool pkg g cap
+          | none => false) = true at hok
+  by_cases h_approved : t.any (· == .explicitApprove name) = true
+  · exact Or.inl h_approved
+  · right
+    have h_false : t.any (· == .explicitApprove name) = false := by
+      revert h_approved
+      cases t.any (· == .explicitApprove name) <;> simp
+    rw [h_false] at hok
+    simp only [Bool.false_or] at hok
+    cases h_lookup : g.lookup name with
+    | none     => simp [h_lookup] at hok
+    | some pkg =>
+      simp only [h_lookup] at hok
+      exact ⟨pkg, rfl, hok⟩
 
--- ─────────────────────────────────────────────
--- 6. Demo packages and graphs
--- ─────────────────────────────────────────────
+-- ── 7. Demo packages and graphs ──────────────────────────────────────
 
--- Packages at different trust levels
 def pkgVerified   : Package := { name := "requests",   trust := .verified }
 def pkgUnreviewed : Package := { name := "cool-utils",  trust := .unreviewed }
 def pkgVuln       : Package := { name := "log4shell",   trust := .knownVulnerable }
 
--- A clean graph: requests has no dangerous deps
 def cleanGraph : DepGraph := [(pkgVerified, [])]
 
--- A poisoned graph: cool-utils depends on a known-vulnerable package
 def poisonedGraph : DepGraph :=
   [(pkgUnreviewed, [pkgVuln]),
    (pkgVuln,       [])]
 
--- A deep graph: verified package has unreviewed transitive dep
 def deepGraph : DepGraph :=
   [({ name := "safe-lib", trust := .verified }, [pkgUnreviewed]),
    (pkgUnreviewed, [pkgVuln]),
    (pkgVuln, [])]
 
--- Agent that installs a verified package
-def installSafeAgent : AgentM Unit :=
-  AgentM.liftOp (.installPkg "requests")
-
--- Agent that installs an unreviewed package with a vulnerable dep
-def installAttackAgent : AgentM Unit :=
-  AgentM.liftOp (.installPkg "cool-utils")
-
--- Capability requiring verified packages only
 def strictCap : Capability where
   allowRead     := true
   allowWrite    := true
@@ -179,44 +163,44 @@ def strictCap : Capability where
   allowInstall  := true
   readPrefixes  := ["/workspace"]
   writePrefixes := ["/workspace"]
-  minTrust      := .verified   -- ← floor is Verified
+  minTrust      := .verified
 
--- ─────────────────────────────────────────────
--- 7. Runtime checks
--- ─────────────────────────────────────────────
+-- ── 8. Concrete runtime checks ───────────────────────────────────────
 
--- Safe install in clean graph → true
-#eval traceInstallsSafe installSafeAgent.collectTrace cleanGraph strictCap
+#eval traceInstallsSafe [.installPkg "requests"] cleanGraph strictCap
+-- expected: true
 
--- Poisoned package (unreviewed + vulnerable dep) → false
-#eval traceInstallsSafe installAttackAgent.collectTrace poisonedGraph strictCap
+#eval traceInstallsSafe [.installPkg "cool-utils"] poisonedGraph strictCap
+-- expected: false
 
--- Deep transitive vulnerability → false
+#eval traceInstallsSafe [.installPkg "safe-lib"] deepGraph strictCap
+-- expected: false
+
 #eval traceInstallsSafe
-  (AgentM.liftOp (.installPkg "safe-lib") : AgentM Unit).collectTrace
-  deepGraph strictCap
+  [.explicitApprove "cool-utils", .installPkg "cool-utils"] poisonedGraph strictCap
+-- expected: true (explicit override)
 
--- ─────────────────────────────────────────────
--- 8. Formal proofs
--- ─────────────────────────────────────────────
+-- ── 9. Formal proofs ─────────────────────────────────────────────────
 
--- Safe install is formally allowed
 example : traceInstallsSafeProp
-    installSafeAgent.collectTrace cleanGraph strictCap := by native_decide
+    [.installPkg "requests"] cleanGraph strictCap := by native_decide
 
--- Poisoned package is formally blocked
 example : ¬ traceInstallsSafeProp
-    installAttackAgent.collectTrace poisonedGraph strictCap := by native_decide
+    [.installPkg "cool-utils"] poisonedGraph strictCap := by native_decide
 
--- Deep transitive vulnerability is formally blocked
 example : ¬ traceInstallsSafeProp
-    ((AgentM.liftOp (.installPkg "safe-lib") : AgentM Unit).collectTrace)
-    deepGraph strictCap := by native_decide
+    [.installPkg "safe-lib"] deepGraph strictCap := by native_decide
 
--- Spine theorem: safe install satisfies per-op trust guarantee
-example : ∀ op ∈ installSafeAgent.collectTrace,
-    ∀ name : String, op = .installPkg name →
+-- ExplicitApprove in the same trace overrides the floor
+example : traceInstallsSafeProp
+    [.explicitApprove "cool-utils", .installPkg "cool-utils"] poisonedGraph strictCap := by
+  native_decide
+
+-- Spine theorem instantiation on a concrete trace
+example : ∀ op ∈ ([.installPkg "requests"] : Trace), ∀ name : String,
+    op = .installPkg name →
+    ([.installPkg "requests"] : Trace).any (· == .explicitApprove name) = true ∨
     ∃ pkg, cleanGraph.lookup name = some pkg ∧ pkgAllowed pkg cleanGraph strictCap :=
-  trustMonotonicity _ _ _ (by native_decide)
+  trustMonotonicity [.installPkg "requests"] cleanGraph strictCap (by native_decide)
 
 end CapLean

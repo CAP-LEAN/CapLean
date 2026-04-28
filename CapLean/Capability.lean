@@ -31,6 +31,7 @@ def withinScopeBool : AgentOp → Capability → Bool
   | .evalCode _,       cap => cap.allowEval
   | .networkCall _,    cap => cap.allowNetwork
   | .installPkg _,     cap => cap.allowInstall
+  | .explicitApprove _, cap => cap.allowInstall
 
 def traceWithinScopeBool (t : Trace) (cap : Capability) : Bool :=
   t.all (withinScopeBool · cap)
