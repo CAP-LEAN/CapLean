@@ -5,8 +5,8 @@ import CapLean.Capability
 namespace CapLean
 
 /--
-The bridge lemma: `traceWithinScopeBool = true`
-unfolds to `withinScopeBool op cap = true` for every op.
+Bridge lemma (still useful for external trace checking):
+`traceWithinScopeBool = true` unfolds to `withinScopeBool op cap = true` for every op.
 -/
 theorem traceWithinScope_iff (t : Trace) (cap : Capability) :
     traceWithinScope t cap ↔ ∀ op ∈ t, withinScope op cap := by
@@ -14,15 +14,19 @@ theorem traceWithinScope_iff (t : Trace) (cap : Capability) :
         List.all_eq_true, List.mem_iff_get]
 
 /--
-**Capability Envelope Theorem**
-If a program's trace passes the capability check,
-every operation in the trace is individually within scope.
+**Capability Envelope Theorem (by construction)**
+
+Every operation in an `AgentM cap` program's trace is within scope by construction
+No hypothesis needed — the proof extracts the `withinScope` evidence
+carried by each `step` constructor.
 -/
 theorem capabilityEnvelope
-    (prog : AgentM α)
-    (cap  : Capability)
-    (h    : traceWithinScope prog.collectTrace cap)
-    : ∀ op ∈ prog.collectTrace, withinScope op cap :=
-  (traceWithinScope_iff prog.collectTrace cap).mp h
+    (prog : AgentM cap α)
+    : ∀ op ∈ prog.collectTrace, withinScope op cap := by
+  induction prog with
+  | pure _ => simp
+  | step op h _ ih =>
+    simp [AgentM.collectTrace]
+    exact ⟨h, ih⟩
 
 end CapLean
