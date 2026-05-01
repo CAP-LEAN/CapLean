@@ -169,6 +169,43 @@ theorem canonicalContainment
   sandboxContainment t sb canonicalEffects h
 
 -- ────────────────────────────────────────────
+-- 6a. Conservative (sandbox-derived) bound
+-- ────────────────────────────────────────────
+
+/--
+Derives a worst-case `OpaqueBound` from the sandbox itself: every opaque
+op is assumed to produce reads and writes to every allowed path, plus
+network and spawn effects if the sandbox permits those syscall categories.
+
+The user never has to enumerate paths — the sandbox boundary is the
+finite, known thing, so this is always sound (though over-approximate).
+-/
+def maximalBound (sb : Sandbox) : OpaqueBound where
+  evalEffects _ :=
+    sb.allowedPaths.flatMap (fun p => [.fsRead p, .fsWrite p])
+    ++ (if sb.allowedSyscalls.contains "NetConn" then [.netConn "*"] else [])
+    ++ (if sb.allowedSyscalls.contains "Spawn"   then [.spawn "*"]   else [])
+  execEffects _ _ :=
+    sb.allowedPaths.flatMap (fun p => [.fsRead p, .fsWrite p])
+    ++ (if sb.allowedSyscalls.contains "NetConn" then [.netConn "*"] else [])
+    ++ (if sb.allowedSyscalls.contains "Spawn"   then [.spawn "*"]   else [])
+
+/--
+**Conservative Containment Theorem**
+
+Specialises `sandboxContainment` to `maximalBound sb`: if opaque ops
+may do *anything the sandbox allows*, containment still holds — no
+custom per-op annotation needed.
+-/
+theorem conservativeContainment
+    (t : Trace) (sb : Sandbox)
+    (h : effectTraceContained
+           (traceAnnotatedEffects t (fullAnnotation (maximalBound sb))) sb)
+    : ∀ op ∈ t, ∀ eff ∈ (fullAnnotation (maximalBound sb)) op,
+        effectWithinSandbox eff sb = true :=
+  sandboxContainment t sb _ h
+
+-- ────────────────────────────────────────────
 -- 7. Demo sandbox + attack scenarios
 -- ────────────────────────────────────────────
 
