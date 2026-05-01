@@ -8,3 +8,4 @@ import CapLean.Capability
 import CapLean.SafetySpine
 import CapLean.Examples
 import CapLean.TrustLattice
+import CapLean.Monotonicity
