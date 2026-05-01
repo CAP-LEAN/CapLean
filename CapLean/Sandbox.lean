@@ -142,6 +142,19 @@ theorem sandboxContainment
   simp only [List.mem_flatten, List.mem_map]
   exact ⟨ann op, ⟨op, hop, rfl⟩, heff⟩
 
+/--
+**Canonical Containment Theorem**
+
+For transparent ops, containment holds with NO trust assumption on any
+user-supplied annotation. The hypothesis only references `canonicalEffects`,
+which is library-defined and correct by construction.
+-/
+theorem canonicalContainment
+    (t : Trace) (sb : Sandbox)
+    (h : effectTraceContained (traceAnnotatedEffects t canonicalEffects) sb)
+    : ∀ op ∈ t, ∀ eff ∈ canonicalEffects op, effectWithinSandbox eff sb = true :=
+  sandboxContainment t sb canonicalEffects h
+
 -- ────────────────────────────────────────────
 -- 7. Demo sandbox + attack scenarios
 -- ────────────────────────────────────────────
