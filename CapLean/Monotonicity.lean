@@ -169,4 +169,58 @@ theorem trustFloorLowering (t : Trace) (g : DepGraph) (cap1 cap2 : Capability)
   | .networkCall _ => exact h1
   | .explicitApprove _ => exact h1
 
+-- ---------------------------------------------------------------
+-- Concrete examples (native_decide sanity checks)
+-- ---------------------------------------------------------------
+
+-- 3a: capability monotonicity
+private def narrowCap : Capability where
+  allowRead := true; allowWrite := false; allowExec := false
+  allowEval := false; allowNetwork := false; allowInstall := false
+  readPrefixes := ["/workspace/src"]; writePrefixes := []
+  minTrust := .verified
+
+private def wideCap : Capability where
+  allowRead := true; allowWrite := true; allowExec := false
+  allowEval := false; allowNetwork := false; allowInstall := false
+  readPrefixes := ["/workspace"]; writePrefixes := ["/workspace"]
+  minTrust := .verified
+
+example : traceWithinScope [.readFile "/workspace/src/main.py"] narrowCap := by native_decide
+example : traceWithinScope [.readFile "/workspace/src/main.py"] wideCap := by native_decide
+
+-- 3b: trace composition
+private def t1 : Trace := [.readFile "/workspace/src/a.py"]
+private def t2 : Trace := [.readFile "/workspace/src/b.py"]
+
+example : traceWithinScope t1 narrowCap := by native_decide
+example : traceWithinScope t2 narrowCap := by native_decide
+example : traceWithinScope (t1 ++ t2) narrowCap := by native_decide
+
+-- 3c: sandbox monotonicity
+private def tightSandbox : Sandbox where
+  allowedPaths := ["/workspace/src"]; allowedSyscalls := []
+
+private def wideSandbox : Sandbox where
+  allowedPaths := ["/workspace"]; allowedSyscalls := ["Spawn"]
+
+example : effectTraceContained [.fsRead "/workspace/src/f.py"] tightSandbox := by native_decide
+example : effectTraceContained [.fsRead "/workspace/src/f.py"] wideSandbox := by native_decide
+
+-- 3d: trust floor lowering
+private def verifiedCap : Capability where
+  allowRead := true; allowWrite := true; allowExec := false
+  allowEval := false; allowNetwork := false; allowInstall := true
+  readPrefixes := ["/workspace"]; writePrefixes := ["/workspace"]
+  minTrust := .verified
+
+private def unreviewedCap : Capability where
+  allowRead := true; allowWrite := true; allowExec := false
+  allowEval := false; allowNetwork := false; allowInstall := true
+  readPrefixes := ["/workspace"]; writePrefixes := ["/workspace"]
+  minTrust := .unreviewed
+
+example : traceInstallsSafeProp [.installPkg "requests"] cleanGraph verifiedCap := by native_decide
+example : traceInstallsSafeProp [.installPkg "requests"] cleanGraph unreviewedCap := by native_decide
+
 end CapLean
