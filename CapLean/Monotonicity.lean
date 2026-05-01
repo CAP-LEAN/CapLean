@@ -220,6 +220,9 @@ private def unreviewedCap : Capability where
   readPrefixes := ["/workspace"]; writePrefixes := ["/workspace"]
   minTrust := .unreviewed
 
+private def cleanGraph : DepGraph :=
+  [({ name := "requests", trust := .verified }, [])]
+
 example : traceInstallsSafeProp [.installPkg "requests"] cleanGraph verifiedCap := by native_decide
 example : traceInstallsSafeProp [.installPkg "requests"] cleanGraph unreviewedCap := by native_decide
 
