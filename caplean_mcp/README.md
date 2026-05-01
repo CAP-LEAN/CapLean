@@ -4,16 +4,6 @@ Enforces CapLean **Layer 1 (capability scope)** live on every Cursor agent
 action and certifies the resulting trace post-hoc with the existing
 `caplean-check` Lean binary.
 
-## Origin
-This project was built during the **LeanLang for Verified
-Autonomy Hackathon** (April 17–18 + online through May 1,
-2026) at the **Indian Institute of Science (IISc),
-Bangalore**.
-Sponsored by **[Emergence AI](https://www.emergence.ai)**
-Organized by **[Emergence India Labs]
-(https://east.emergence.ai)** in collaboration with
-**IISc Bangalore**.
-
 ## What it does
 
 - Exposes 10 MCP tools (`caplean.set_policy`, `caplean.check_read`,
@@ -105,18 +95,3 @@ Then call in **Cursor chat** `caplean.verify_session` — output mirrors `Check/
 | `server.py` | FastMCP server, tool registrations, `verify_session` shell-out |
 | `cursorrules.template.md` | Drop-in `.cursorrules` for Cursor workspaces |
 | `pyproject.toml` | `mcp>=1.0` dep, console entry point `caplean-mcp` |
-
-## Acknowledgments
-This project was made possible by:
-- **Emergence AI** — Hackathon sponsor
-- **Emergence India Labs** — Event organizer and
-research direction
-- **Indian Institute of Science (IISc), Bangalore** —
-Academic partner, hackathon co-design, tutorials,
-and mentorship
-
-## Links
-- [Hackathon Page](https://east.emergence.ai/
-hackathon-april2026.html)
-- [Emergence India Labs](https://east.emergence.ai)
-- [Emergence AI](https://www.emergence.ai)
