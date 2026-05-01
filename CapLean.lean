@@ -9,3 +9,5 @@ import CapLean.SafetySpine
 import CapLean.CapabilityExamples
 import CapLean.TrustLattice
 import CapLean.Monotonicity
+import CapLean.SandboxExamples
+import CapLean.TrustExamples
