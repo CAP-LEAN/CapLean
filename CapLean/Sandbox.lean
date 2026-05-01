@@ -325,6 +325,12 @@ def shellEscapeAnn : EffectAnnotation := fullAnnotation shellEscapeBound
 -- 8. Runtime checks (#eval)
 -- ────────────────────────────────────────────
 
+-- 8a. Path normalization demo
+#eval normalizePath "/workspace/../../etc/passwd"     -- "/etc/passwd"
+#eval normalizePath "/workspace/./src/../src/main.py" -- "/workspace/src/main.py"
+#eval normalizePath "/workspace/src/main.py"          -- "/workspace/src/main.py"
+
+-- 8b. Original containment checks
 -- Safe eval: contained → true
 #eval effectTraceWithinSandbox
   (traceAnnotatedEffects evalAgent.collectTrace safeEvalAnn) workspaceSandbox
@@ -345,6 +351,21 @@ def shellEscapeAnn : EffectAnnotation := fullAnnotation shellEscapeBound
 -- alone — no annotation can suppress this
 #eval effectTraceWithinSandbox
   (traceAnnotatedEffects readPasswdAgent.collectTrace canonicalEffects) workspaceSandbox
+
+-- 8c. Conservative bound: maximalBound derives annotation from sandbox
+#eval effectTraceWithinSandbox
+  (traceAnnotatedEffects evalAgent.collectTrace
+    (fullAnnotation (maximalBound workspaceSandbox))) workspaceSandbox
+
+-- 8d. Path-traversal attack: previously passed raw startsWith, now blocked
+/-- ATTACK 4: eval declares traversal path that looks like /workspace prefix -/
+def traversalBound : OpaqueBound where
+  evalEffects _ := [.fsRead "/workspace/../../etc/passwd"]
+  execEffects _ _ := []
+
+#eval effectTraceWithinSandbox
+  (traceAnnotatedEffects evalAgent.collectTrace
+    (fullAnnotation traversalBound)) workspaceSandbox
 
 -- ────────────────────────────────────────────
 -- 9. Formal proofs
@@ -406,5 +427,27 @@ example : effectTraceContained
 example : ∀ op ∈ safeReadAgent.collectTrace,
     ∀ eff ∈ canonicalEffects op, effectWithinSandbox eff workspaceSandbox = true :=
   canonicalContainment _ _ (by native_decide)
+
+-- 9c. Conservative bound: maximalBound is contained (no custom annotation)
+example : effectTraceContained
+    (traceAnnotatedEffects evalAgent.collectTrace
+      (fullAnnotation (maximalBound workspaceSandbox)))
+    workspaceSandbox := by native_decide
+
+example : ∀ op ∈ evalAgent.collectTrace,
+    ∀ eff ∈ (fullAnnotation (maximalBound workspaceSandbox)) op,
+      effectWithinSandbox eff workspaceSandbox = true :=
+  conservativeContainment _ _ (by native_decide)
+
+-- 9d. Path-traversal attack: normalization defeats ../
+example : ¬ effectTraceContained
+    (traceAnnotatedEffects evalAgent.collectTrace (fullAnnotation traversalBound))
+    workspaceSandbox := by native_decide
+
+-- 9e. fullEnvelope: Layer 1 + Layer 2 in one shot
+example : (∀ op ∈ evalAgent.collectTrace, withinScope op sandboxDemoCap)
+    ∧ (∀ op ∈ evalAgent.collectTrace,
+        ∀ eff ∈ safeEvalAnn op, effectWithinSandbox eff workspaceSandbox = true) :=
+  fullEnvelope evalAgent workspaceSandbox safeEvalAnn (by native_decide)
 
 end CapLean
