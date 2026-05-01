@@ -44,13 +44,26 @@ structure Sandbox where
   deriving Repr
 
 -- ────────────────────────────────────────────
+-- 2a. Path normalization
+-- ────────────────────────────────────────────
+
+/-- Collapse `.` and `..` segments so prefix checking is immune to traversal -/
+def normalizePath (p : String) : String :=
+  let parts := p.splitOn "/"
+  let folded := parts.foldl (fun acc seg =>
+    if seg == ".." then acc.dropLast
+    else if seg == "." || seg == "" then acc
+    else acc ++ [seg]) []
+  "/" ++ "/".intercalate folded
+
+-- ────────────────────────────────────────────
 -- 3. Containment predicate (Bool + Prop)
 -- ────────────────────────────────────────────
 
 /-- Is a single effect within the sandbox boundary? -/
 def effectWithinSandbox : Effect → Sandbox → Bool
-  | .fsRead path,  sb => sb.allowedPaths.any (path.startsWith ·)
-  | .fsWrite path, sb => sb.allowedPaths.any (path.startsWith ·)
+  | .fsRead path,  sb => sb.allowedPaths.any (fun pre => (normalizePath path).startsWith pre)
+  | .fsWrite path, sb => sb.allowedPaths.any (fun pre => (normalizePath path).startsWith pre)
   | .netConn _,    sb => sb.allowedSyscalls.contains "NetConn"
   | .spawn _,      sb => sb.allowedSyscalls.contains "Spawn"
 
