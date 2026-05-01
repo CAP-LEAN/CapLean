@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caplean-mcp"
+version = "0.1.0"
+description = "MCP server exposing CapLean Layer 1 capability checks to Cursor"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+caplean-mcp = "caplean_mcp.server:main"
+
+[tool.setuptools]
+packages = ["caplean_mcp"]
+package-dir = {"caplean_mcp" = "."}
