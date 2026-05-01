@@ -1,6 +1,6 @@
 name = "CapLean"
 version = "0.1.0"
-defaultTargets = ["CapLean"]
+defaultTargets = ["CapLean", "CheckLib", "caplean-check"]
 
 [[lean_lib]]
 name = "CapLean"
