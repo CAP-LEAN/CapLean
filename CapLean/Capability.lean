@@ -17,10 +17,10 @@ instance (t : Trace) (cap : Capability) : Decidable (traceWithinScope t cap) :=
 def firstViolation (t : Trace) (cap : Capability) : Option AgentOp :=
   t.find? (fun op => !withinScopeBool op cap)
 
-/-- Enforce capability: returns error with the violating op, or Ok () -/
-def enforceCapability (prog : AgentM α) (cap : Capability)
-    : Except AgentOp Unit :=
-  match firstViolation prog.collectTrace cap with
+/-- Enforce capability on an external trace (e.g. deserialized from the Python shim).
+    For by-construction programs this is redundant — the type already guarantees scope. -/
+def enforceTrace (t : Trace) (cap : Capability) : Except AgentOp Unit :=
+  match firstViolation t cap with
   | some op => Except.error op
   | none    => Except.ok ()
 
