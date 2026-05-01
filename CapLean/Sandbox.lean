@@ -2,6 +2,7 @@ import CapLean.AgentOp
 import CapLean.AgentM
 import CapLean.Trace
 import CapLean.Capability
+import CapLean.SafetySpine
 
 namespace CapLean
 
@@ -239,6 +240,24 @@ theorem certifiedSandboxContainment
         effectWithinSandbox eff sb = true)
       ∧ RuntimeEnforces cb.bound :=
   ⟨sandboxContainment t sb _ h, cb.evidence⟩
+
+-- ────────────────────────────────────────────
+-- 6c. Combined Layer 1 + Layer 2 theorem
+-- ────────────────────────────────────────────
+
+/--
+**Full Envelope Theorem (Layer 1 + Layer 2)**
+
+Pairs `capabilityEnvelope` (every op is within declared capability) with
+`sandboxContainment` (every declared effect is within the sandbox) into
+a single result: an `AgentM` program is both capability-safe and sandbox-safe.
+-/
+theorem fullEnvelope
+    (prog : AgentM cap α) (sb : Sandbox) (ann : EffectAnnotation)
+    (h : effectTraceContained (traceAnnotatedEffects prog.collectTrace ann) sb)
+    : (∀ op ∈ prog.collectTrace, withinScope op cap)
+    ∧ (∀ op ∈ prog.collectTrace, ∀ eff ∈ ann op, effectWithinSandbox eff sb = true) :=
+  ⟨capabilityEnvelope prog, sandboxContainment prog.collectTrace sb ann h⟩
 
 -- ────────────────────────────────────────────
 -- 7. Demo sandbox + attack scenarios
