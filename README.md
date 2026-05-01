@@ -13,12 +13,19 @@ over traces of those monads.
 | Trust | `TrustLattice.lean` | `trustMonotonicity` | Packages below trust floor |
 
 ## Honest scope
-Theorems check **declared** behaviour against policies.
+The capability layer enforces containment **by construction**: `AgentM` is
+indexed by a `Capability`, and each operation carries a compile-time proof
+that it is within scope. Programs containing out-of-scope ops are rejected
+by the type checker — no runtime check is needed.
+
 The sandbox layer proves that *if* an `EffectAnnotation` is correct,
 containment holds — it does not verify the annotation itself.
-The capability layer does post-hoc trace checking, not prevention by construction.
+
+The trust layer proves that *if* the declared dependency graph is accurate,
+every install meets the trust floor or was explicitly approved.
+It does not verify the graph against a live registry.
 
 ## Running
-\`\`\`bash
+```bash
 lake build   # proves all theorems, ~30s
-\`\`\`
+```

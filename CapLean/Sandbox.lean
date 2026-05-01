@@ -1,4 +1,5 @@
 import CapLean.AgentOp
+import CapLean.AgentM
 import CapLean.Trace
 import CapLean.Capability
 
@@ -109,18 +110,30 @@ theorem sandboxContainment
 -- 6. Demo sandbox + attack scenarios
 -- ────────────────────────────────────────────
 
+/-- Permissive capability for sandbox demos (all op categories allowed) -/
+def sandboxDemoCap : Capability where
+  allowRead     := true
+  allowWrite    := true
+  allowExec     := true
+  allowEval     := true
+  allowNetwork  := true
+  allowInstall  := true
+  readPrefixes  := ["/"]
+  writePrefixes := ["/"]
+  minTrust      := .knownVulnerable
+
 /-- The demo sandbox: only /workspace paths, no network, no spawn -/
 def workspaceSandbox : Sandbox where
   allowedPaths    := ["/workspace"]
   allowedSyscalls := []
 
 /-- Agent that only runs EvalCode -/
-def evalAgent : AgentM Unit :=
-  AgentM.liftOp (.evalCode "run_tests()")
+def evalAgent : AgentM sandboxDemoCap Unit :=
+  op! (.evalCode "run_tests()")
 
 /-- Agent that tries ExecShell -/
-def shellAgent : AgentM Unit :=
-  AgentM.liftOp (.execShell "bash" ["-i"])
+def shellAgent : AgentM sandboxDemoCap Unit :=
+  op! (.execShell "bash" ["-i"])
 
 -- Effect annotations for each scenario
 
