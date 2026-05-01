@@ -4,3 +4,12 @@ defaultTargets = ["CapLean"]
 
 [[lean_lib]]
 name = "CapLean"
+
+[[lean_lib]]
+name = "CheckLib"
+roots = ["Check.TraceJSON"]
+
+[[lean_exe]]
+name = "caplean-check"
+root = "Check.Main"
+deps = ["CapLean", "CheckLib"]
