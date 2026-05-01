@@ -81,7 +81,43 @@ def traceAnnotatedEffects (t : Trace) (ann : EffectAnnotation) : EffectTrace :=
   (t.map ann).flatten
 
 -- ────────────────────────────────────────────
--- 5. Containment theorem
+-- 5. Canonical effects — correct by construction
+-- ────────────────────────────────────────────
+
+/--
+Derives effects structurally from the op itself. For transparent ops
+(file I/O, network), the effects are deterministic. For opaque ops
+(evalCode, execShell), canonical effects capture only what is
+statically visible (e.g. spawn for execShell); the rest comes from
+`OpaqueBound`.
+-/
+def canonicalEffects : AgentOp → EffectTrace
+  | .readFile path      => [.fsRead path]
+  | .writeFile path _   => [.fsWrite path]
+  | .networkCall url    => [.netConn url]
+  | .execShell cmd _    => [.spawn cmd]
+  | .evalCode _         => []
+  | .installPkg _       => []
+  | .explicitApprove _  => []
+
+/--
+User-declared bound on additional effects for opaque ops only.
+This is the sole trust assumption — canonical effects for transparent
+ops are definitional and cannot be overridden.
+-/
+structure OpaqueBound where
+  evalEffects : CodeSnippet → EffectTrace
+  execEffects : Cmd → List String → EffectTrace
+
+/-- Combines canonical (structural) effects with the opaque bound -/
+def fullAnnotation (ob : OpaqueBound) : EffectAnnotation := fun op =>
+  canonicalEffects op ++ match op with
+    | .evalCode snippet    => ob.evalEffects snippet
+    | .execShell cmd args  => ob.execEffects cmd args
+    | _                    => []
+
+-- ────────────────────────────────────────────
+-- 6. Containment theorems
 -- ────────────────────────────────────────────
 
 /--
@@ -107,7 +143,7 @@ theorem sandboxContainment
   exact ⟨ann op, ⟨op, hop, rfl⟩, heff⟩
 
 -- ────────────────────────────────────────────
--- 6. Demo sandbox + attack scenarios
+-- 7. Demo sandbox + attack scenarios
 -- ────────────────────────────────────────────
 
 /-- Permissive capability for sandbox demos (all op categories allowed) -/
@@ -159,7 +195,7 @@ def shellEscapeAnn : EffectAnnotation
   | _              => []
 
 -- ────────────────────────────────────────────
--- 7. Runtime checks (#eval)
+-- 8. Runtime checks (#eval)
 -- ────────────────────────────────────────────
 
 -- Safe eval: contained → true
@@ -179,7 +215,7 @@ def shellEscapeAnn : EffectAnnotation
   (traceAnnotatedEffects shellAgent.collectTrace shellEscapeAnn) workspaceSandbox
 
 -- ────────────────────────────────────────────
--- 8. Formal proofs
+-- 9. Formal proofs
 -- ────────────────────────────────────────────
 
 -- Safe agent: formally proved contained
