@@ -3,6 +3,27 @@ import CapLean
 
 namespace CapLean.Check
 
+/-!
+## Check.TraceJSON — JSONL Serialization Contract
+
+**Purpose:** Parses external trace JSONL and policy-config JSON into the Lean
+data types the safety layers consume. Used by `Check/Main` (the CLI).
+
+**Wire format:**
+- Trace: one JSON object per line. Op tag = `"op"` field, e.g.
+  `{"op":"ReadFile","path":"/workspace/main.py"}`.
+- Config: a single JSON object with `capability`, `sandbox`, `depGraph` keys.
+- Trust levels are strings: `"verified"`, `"unreviewed"`, `"knownVulnerable"`.
+
+**Key definitions:**
+- `parseTrustLevel`, `parseAgentOp`, `parseTrace`
+- `parseCapability`, `parseSandboxConfig`, `parsePackage`, `parseDepGraph`
+- `parseConfig` — top-level entry point returning `(Capability × Sandbox × DepGraph)`
+
+**Assumptions:** `depGraph` references must resolve; unknown package names
+in dependency lists yield a parse error rather than being silently dropped.
+-/
+
 open Lean
 
 def parseTrustLevel (s : String) : Except String TrustLevel :=

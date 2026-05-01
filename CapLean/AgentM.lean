@@ -3,6 +3,24 @@ import CapLean.CapCore
 
 namespace CapLean
 
+/-!
+## AgentM — Capability-Indexed Free Monad
+
+**Purpose:** Models agent programs as a free monad whose constructors carry
+proofs of capability scope, so out-of-scope programs fail to type-check.
+
+**Key definitions:**
+- `AgentM cap α` — inductive program tree (`pure` / `step`)
+- `AgentM.bind`, `Monad` instance — sequential composition
+- `AgentM.liftOp` — lifts a single op given a scope proof
+- `op!` macro — discharges the scope proof via `native_decide`
+
+**Key theorems:** none directly here — `capabilityEnvelope` lives in `SafetySpine`.
+
+**Assumptions:** Scope proofs are decided via `native_decide`; users may
+supply manual proofs when the decision procedure cannot reduce.
+-/
+
 /--
 `AgentM` is a capability-indexed free-monad-style program tree.
 Every `step` carries a proof that the operation is within the

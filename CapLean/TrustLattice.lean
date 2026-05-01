@@ -5,12 +5,29 @@ import CapLean.Capability
 namespace CapLean
 
 /-!
-## Layer 3 — Supply Chain Trust
+## TrustLattice — Layer 3 Supply Chain Trust
 
-### Trust model (honest scope)
-`traceInstallsSafe` is a specification-level check. It proves that *if* the
-declared packages and graph are accurate, every install meets the trust floor
-or was explicitly approved. It does not verify the graph against a live registry.
+**Purpose:** For every `installPkg` op in a trace, prove that either the
+package's transitive trust meets the floor declared by the capability, or
+the trace contains an `explicitApprove` for it.
+
+**Key definitions:**
+- `TrustLevel.toNat` + `LE TrustLevel` — total order on trust
+- `Package`, `DepGraph` — package data and its dependency edges
+- `DepGraph.lookup`, `DepGraph.deps`, `DepGraph.transitiveDeps`,
+  `DepGraph.minTransitiveTrust`
+- `pkgAllowedBool` / `pkgAllowed` — does the transitive minimum meet the floor?
+- `traceInstallsSafe` / `traceInstallsSafeProp` — trace-level check
+
+**Key theorems:**
+- `traceInstallsSafe_nil` — empty trace is trivially safe
+- `trustMonotonicity` — Layer 3 envelope: pass implies approved-or-trusted
+
+**Assumptions (honest scope):** `traceInstallsSafe` proves *if* the declared
+`DepGraph` is accurate, every install meets the floor or was explicitly
+approved. It does not verify the graph against a live package registry.
+
+Demos and `#eval` blocks live in `CapLean.TrustExamples`.
 -/
 
 -- ── 1. Total order on TrustLevel ─────────────────────────────────────

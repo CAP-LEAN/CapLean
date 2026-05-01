@@ -7,17 +7,34 @@ import CapLean.SafetySpine
 namespace CapLean
 
 /-!
-## Layer 2 — Sandbox Containment
+## Sandbox — Layer 2 Containment
 
-This layer specialises `EvalCode` and `ExecShell`.
-Even if Layer 1 permits these ops, Layer 2 constrains what the
-*executed code* can reach at runtime: which file paths it may touch
-and which syscall categories it may invoke.
+**Purpose:** Even if Layer 1 permits `evalCode` / `execShell`, Layer 2
+constrains what the *executed code* may touch — file paths and syscall
+categories.
 
-The key abstraction is an **EffectAnnotation** — a declared mapping from
-each `AgentOp` to the low-level effects it will produce. The containment
-theorem says: if every declared effect is within the sandbox boundary,
-the agent is sandbox-safe.
+**Key definitions:**
+- `Effect`, `EffectTrace`, `Sandbox` — boundary description
+- `normalizePath` — collapses `.` / `..` so prefix checks defeat traversal
+- `effectWithinSandbox`, `effectTraceContained` — containment predicates
+- `EffectAnnotation`, `traceAnnotatedEffects` — user-declared op→effects map
+- `canonicalEffects` — library-defined transparent-op effects
+- `OpaqueBound`, `fullAnnotation` — user-declared bound for opaque ops only
+- `maximalBound` — sandbox-derived worst-case bound (no per-op declaration)
+- `RuntimeEnforces` (axiom), `CertifiedBound`, `certifiedAnnotation`
+
+**Key theorems:**
+- `sandboxContainment` — Layer 2 envelope (relative to user annotation)
+- `canonicalContainment` — specialization for transparent ops, no trust needed
+- `conservativeContainment` — specialization for `maximalBound`
+- `certifiedSandboxContainment` — adds `RuntimeEnforces` to conclusion
+- `fullEnvelope` — Layer 1 + Layer 2 in one shot
+
+**Assumptions:** Effects of opaque ops (`evalCode`, `execShell`) come from
+the user-supplied `OpaqueBound` — that is the trust boundary for Layer 2.
+Canonical effects for transparent ops are definitional and cannot be lied about.
+
+Demos and `#eval` blocks live in `CapLean.SandboxExamples`.
 -/
 
 -- ────────────────────────────────────────────
