@@ -206,6 +206,41 @@ theorem conservativeContainment
   sandboxContainment t sb _ h
 
 -- ────────────────────────────────────────────
+-- 6b. Certified bound (explicit runtime axiom)
+-- ────────────────────────────────────────────
+
+/--
+An irrefutable axiom marking that a given `OpaqueBound` is enforced by
+a runtime monitor. Because it is an `axiom` (not a `def`), it cannot be
+proved by `rfl` or `native_decide` — the only way to inhabit it is to
+explicitly construct a `CertifiedBound` with the evidence field
+-/
+axiom RuntimeEnforces : OpaqueBound → Prop
+
+/-- Pairs an `OpaqueBound` with evidence that a runtime monitor enforces it -/
+structure CertifiedBound where
+  bound    : OpaqueBound
+  evidence : RuntimeEnforces bound
+
+/-- Annotation derived from a certified bound — identical to `fullAnnotation` -/
+def certifiedAnnotation (cb : CertifiedBound) : EffectAnnotation :=
+  fullAnnotation cb.bound
+
+/--
+**Certified Sandbox Containment Theorem**
+
+Like `sandboxContainment`, but the conclusion additionally carries
+`RuntimeEnforces cb.bound`.
+-/
+theorem certifiedSandboxContainment
+    (t : Trace) (sb : Sandbox) (cb : CertifiedBound)
+    (h : effectTraceContained (traceAnnotatedEffects t (certifiedAnnotation cb)) sb)
+    : (∀ op ∈ t, ∀ eff ∈ (certifiedAnnotation cb) op,
+        effectWithinSandbox eff sb = true)
+      ∧ RuntimeEnforces cb.bound :=
+  ⟨sandboxContainment t sb _ h, cb.evidence⟩
+
+-- ────────────────────────────────────────────
 -- 7. Demo sandbox + attack scenarios
 -- ────────────────────────────────────────────
 
