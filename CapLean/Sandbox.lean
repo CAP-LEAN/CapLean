@@ -246,7 +246,9 @@ def shellEscapeAnn : EffectAnnotation := fullAnnotation shellEscapeBound
 -- 9. Formal proofs
 -- ────────────────────────────────────────────
 
--- Safe agent: formally proved contained
+-- 9a. fullAnnotation-based proofs (opaque ops require OpaqueBound)
+
+-- Safe agent: contained
 example : effectTraceContained
     (traceAnnotatedEffects evalAgent.collectTrace safeEvalAnn)
     workspaceSandbox := by native_decide
@@ -271,14 +273,16 @@ example : ∀ op ∈ evalAgent.collectTrace,
     ∀ eff ∈ safeEvalAnn op, effectWithinSandbox eff workspaceSandbox = true :=
   sandboxContainment _ _ _ (by native_decide)
 
--- Transparent-op demo: readFile "/etc/passwd" is rejected by canonicalEffects
--- regardless of any user annotation — the effect is derived structurally
+-- 9b. canonicalContainment-based proofs (transparent ops, NO trust assumption)
+
+-- Transparent-op rejection: readFile "/etc/passwd" is caught by canonicalEffects
+-- alone — no OpaqueBound involved, no trust assumption needed
 example : ¬ effectTraceContained
     (traceAnnotatedEffects readPasswdAgent.collectTrace canonicalEffects)
     workspaceSandbox := by native_decide
 
 -- Even a "lying" empty OpaqueBound cannot suppress transparent-op effects:
--- fullAnnotation still derives fsRead "/etc/passwd" from canonicalEffects
+-- fullAnnotation always includes canonicalEffects
 def emptyBound : OpaqueBound where
   evalEffects _ := []
   execEffects _ _ := []
@@ -286,5 +290,17 @@ def emptyBound : OpaqueBound where
 example : ¬ effectTraceContained
     (traceAnnotatedEffects readPasswdAgent.collectTrace (fullAnnotation emptyBound))
     workspaceSandbox := by native_decide
+
+-- A safe transparent-op agent (reads /workspace/main.py) passes canonicalContainment
+def safeReadAgent : AgentM sandboxDemoCap Unit :=
+  op! (.readFile "/workspace/main.py")
+
+example : effectTraceContained
+    (traceAnnotatedEffects safeReadAgent.collectTrace canonicalEffects)
+    workspaceSandbox := by native_decide
+
+example : ∀ op ∈ safeReadAgent.collectTrace,
+    ∀ eff ∈ canonicalEffects op, effectWithinSandbox eff workspaceSandbox = true :=
+  canonicalContainment _ _ (by native_decide)
 
 end CapLean
