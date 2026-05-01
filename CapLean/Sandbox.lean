@@ -184,28 +184,38 @@ def evalAgent : AgentM sandboxDemoCap Unit :=
 def shellAgent : AgentM sandboxDemoCap Unit :=
   op! (.execShell "bash" ["-i"])
 
--- Effect annotations for each scenario
+/-- Agent that reads a sensitive file (transparent op) -/
+def readPasswdAgent : AgentM sandboxDemoCap Unit :=
+  op! (.readFile "/etc/passwd")
+
+-- OpaqueBound-based annotations
 
 /-- SAFE: eval reads and writes only workspace files -/
-def safeEvalAnn : EffectAnnotation
-  | .evalCode _ => [.fsRead "/workspace/test.py",
+def safeEvalBound : OpaqueBound where
+  evalEffects _ := [.fsRead "/workspace/test.py",
                     .fsWrite "/workspace/result.txt"]
-  | _           => []
+  execEffects _ _ := []
 
 /-- ATTACK 1: eval tries to read /etc/passwd -/
-def etcPasswdAnn : EffectAnnotation
-  | .evalCode _ => [.fsRead "/etc/passwd"]
-  | _           => []
+def etcPasswdBound : OpaqueBound where
+  evalEffects _ := [.fsRead "/etc/passwd"]
+  execEffects _ _ := []
 
 /-- ATTACK 2: eval tries to open a network connection -/
-def netExfilAnn : EffectAnnotation
-  | .evalCode _ => [.netConn "attacker.com"]
-  | _           => []
+def netExfilBound : OpaqueBound where
+  evalEffects _ := [.netConn "attacker.com"]
+  execEffects _ _ := []
 
-/-- ATTACK 3: exec spawns an interactive shell -/
-def shellEscapeAnn : EffectAnnotation
-  | .execShell _ _ => [.spawn "/bin/bash"]
-  | _              => []
+/-- ATTACK 3: exec declares additional spawn of /bin/bash -/
+def shellEscapeBound : OpaqueBound where
+  evalEffects _ := []
+  execEffects _ _ := [.spawn "/bin/bash"]
+
+-- Legacy EffectAnnotation aliases (via fullAnnotation)
+def safeEvalAnn : EffectAnnotation := fullAnnotation safeEvalBound
+def etcPasswdAnn : EffectAnnotation := fullAnnotation etcPasswdBound
+def netExfilAnn : EffectAnnotation := fullAnnotation netExfilBound
+def shellEscapeAnn : EffectAnnotation := fullAnnotation shellEscapeBound
 
 -- ────────────────────────────────────────────
 -- 8. Runtime checks (#eval)
@@ -226,6 +236,11 @@ def shellEscapeAnn : EffectAnnotation
 -- Shell escape attack → false
 #eval effectTraceWithinSandbox
   (traceAnnotatedEffects shellAgent.collectTrace shellEscapeAnn) workspaceSandbox
+
+-- Transparent-op demo: readFile "/etc/passwd" is rejected by canonical effects
+-- alone — no annotation can suppress this
+#eval effectTraceWithinSandbox
+  (traceAnnotatedEffects readPasswdAgent.collectTrace canonicalEffects) workspaceSandbox
 
 -- ────────────────────────────────────────────
 -- 9. Formal proofs
@@ -255,5 +270,21 @@ example : ¬ effectTraceContained
 example : ∀ op ∈ evalAgent.collectTrace,
     ∀ eff ∈ safeEvalAnn op, effectWithinSandbox eff workspaceSandbox = true :=
   sandboxContainment _ _ _ (by native_decide)
+
+-- Transparent-op demo: readFile "/etc/passwd" is rejected by canonicalEffects
+-- regardless of any user annotation — the effect is derived structurally
+example : ¬ effectTraceContained
+    (traceAnnotatedEffects readPasswdAgent.collectTrace canonicalEffects)
+    workspaceSandbox := by native_decide
+
+-- Even a "lying" empty OpaqueBound cannot suppress transparent-op effects:
+-- fullAnnotation still derives fsRead "/etc/passwd" from canonicalEffects
+def emptyBound : OpaqueBound where
+  evalEffects _ := []
+  execEffects _ _ := []
+
+example : ¬ effectTraceContained
+    (traceAnnotatedEffects readPasswdAgent.collectTrace (fullAnnotation emptyBound))
+    workspaceSandbox := by native_decide
 
 end CapLean
