@@ -106,6 +106,16 @@ log_install("requests")
 log_approve("cool-utils")
 ```
 
+## Cursor integration (MCP)
+
+`caplean_mcp/` ships an MCP server that lets Cursor's agent consult CapLean
+Layer 1 before each side-effecting action. Setup, schema, and honest-scope
+notes are in [`caplean_mcp/README.md`](caplean_mcp/README.md). The server
+writes the same `/tmp/caplean_trace.jsonl` and `/tmp/caplean_config.json`
+files that `caplean-check` already certifies, so the post-hoc audit path is
+unchanged. Live blocking covers Layer 1 only; Layers 2 and 3 are evaluated
+at session end via `caplean.verify_session`.
+
 ## Theorem reference
 
 The full API surface of the library — every named theorem, where it lives,
