@@ -2,12 +2,34 @@ import CapLean.AgentOp
 
 namespace CapLean
 
+/-!
+## CapCore — Capability and Trust Level
+
+**Purpose:** Core data types for declaring what an agent is allowed to do.
+
+**Key definitions:**
+- `TrustLevel` — three-point lattice (`knownVulnerable < unreviewed < verified`)
+- `Capability` — boolean flags + path prefixes + minimum trust floor
+- `withinScopeBool` / `withinScope` — predicate "does this op fit this cap?"
+
+**Key theorems:** none — predicates are decidable by construction.
+
+**Assumptions:** `Capability` is the ground truth for what an agent may do;
+no policy is inferred from the environment.
+-/
+
+/-- Three-point trust lattice for packages: vulnerable < unreviewed < verified -/
 inductive TrustLevel where
   | knownVulnerable
   | unreviewed
   | verified
   deriving Repr, DecidableEq, Ord, BEq
 
+/--
+A capability declares what an agent may do: which op categories are
+permitted, which path prefixes may be read/written, and the minimum
+trust floor for package installs.
+-/
 structure Capability where
   allowRead     : Bool
   allowWrite    : Bool
@@ -19,7 +41,11 @@ structure Capability where
   writePrefixes : List String
   minTrust      : TrustLevel
 
-/-- Computable Bool check — primary definition -/
+/--
+Computable Bool check: is the given op within the declared capability?
+This is the primary definition; the Prop version `withinScope` is derived
+so it inherits decidability automatically.
+-/
 def withinScopeBool : AgentOp → Capability → Bool
   | .readFile path,    cap =>
       cap.allowRead && cap.readPrefixes.any (path.startsWith ·)

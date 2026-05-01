@@ -5,12 +5,29 @@ import CapLean.Capability
 namespace CapLean
 
 /-!
-## Layer 3 — Supply Chain Trust
+## TrustLattice — Layer 3 Supply Chain Trust
 
-### Trust model (honest scope)
-`traceInstallsSafe` is a specification-level check. It proves that *if* the
-declared packages and graph are accurate, every install meets the trust floor
-or was explicitly approved. It does not verify the graph against a live registry.
+**Purpose:** For every `installPkg` op in a trace, prove that either the
+package's transitive trust meets the floor declared by the capability, or
+the trace contains an `explicitApprove` for it.
+
+**Key definitions:**
+- `TrustLevel.toNat` + `LE TrustLevel` — total order on trust
+- `Package`, `DepGraph` — package data and its dependency edges
+- `DepGraph.lookup`, `DepGraph.deps`, `DepGraph.transitiveDeps`,
+  `DepGraph.minTransitiveTrust`
+- `pkgAllowedBool` / `pkgAllowed` — does the transitive minimum meet the floor?
+- `traceInstallsSafe` / `traceInstallsSafeProp` — trace-level check
+
+**Key theorems:**
+- `traceInstallsSafe_nil` — empty trace is trivially safe
+- `trustMonotonicity` — Layer 3 envelope: pass implies approved-or-trusted
+
+**Assumptions (honest scope):** `traceInstallsSafe` proves *if* the declared
+`DepGraph` is accurate, every install meets the floor or was explicitly
+approved. It does not verify the graph against a live package registry.
+
+Demos and `#eval` blocks live in `CapLean.TrustExamples`.
 -/
 
 -- ── 1. Total order on TrustLevel ─────────────────────────────────────
@@ -136,71 +153,5 @@ theorem trustMonotonicity
     | some pkg =>
       simp only [h_lookup] at hok
       exact ⟨pkg, rfl, hok⟩
-
--- ── 7. Demo packages and graphs ──────────────────────────────────────
-
-def pkgVerified   : Package := { name := "requests",   trust := .verified }
-def pkgUnreviewed : Package := { name := "cool-utils",  trust := .unreviewed }
-def pkgVuln       : Package := { name := "log4shell",   trust := .knownVulnerable }
-
-def cleanGraph : DepGraph := [(pkgVerified, [])]
-
-def poisonedGraph : DepGraph :=
-  [(pkgUnreviewed, [pkgVuln]),
-   (pkgVuln,       [])]
-
-def deepGraph : DepGraph :=
-  [({ name := "safe-lib", trust := .verified }, [pkgUnreviewed]),
-   (pkgUnreviewed, [pkgVuln]),
-   (pkgVuln, [])]
-
-def strictCap : Capability where
-  allowRead     := true
-  allowWrite    := true
-  allowExec     := false
-  allowEval     := true
-  allowNetwork  := false
-  allowInstall  := true
-  readPrefixes  := ["/workspace"]
-  writePrefixes := ["/workspace"]
-  minTrust      := .verified
-
--- ── 8. Concrete runtime checks ───────────────────────────────────────
-
-#eval traceInstallsSafe [.installPkg "requests"] cleanGraph strictCap
--- expected: true
-
-#eval traceInstallsSafe [.installPkg "cool-utils"] poisonedGraph strictCap
--- expected: false
-
-#eval traceInstallsSafe [.installPkg "safe-lib"] deepGraph strictCap
--- expected: false
-
-#eval traceInstallsSafe
-  [.explicitApprove "cool-utils", .installPkg "cool-utils"] poisonedGraph strictCap
--- expected: true (explicit override)
-
--- ── 9. Formal proofs ─────────────────────────────────────────────────
-
-example : traceInstallsSafeProp
-    [.installPkg "requests"] cleanGraph strictCap := by native_decide
-
-example : ¬ traceInstallsSafeProp
-    [.installPkg "cool-utils"] poisonedGraph strictCap := by native_decide
-
-example : ¬ traceInstallsSafeProp
-    [.installPkg "safe-lib"] deepGraph strictCap := by native_decide
-
--- ExplicitApprove in the same trace overrides the floor
-example : traceInstallsSafeProp
-    [.explicitApprove "cool-utils", .installPkg "cool-utils"] poisonedGraph strictCap := by
-  native_decide
-
--- Spine theorem instantiation on a concrete trace
-example : ∀ op ∈ ([.installPkg "requests"] : Trace), ∀ name : String,
-    op = .installPkg name →
-    ([.installPkg "requests"] : Trace).any (· == .explicitApprove name) = true ∨
-    ∃ pkg, cleanGraph.lookup name = some pkg ∧ pkgAllowed pkg cleanGraph strictCap :=
-  trustMonotonicity [.installPkg "requests"] cleanGraph strictCap (by native_decide)
 
 end CapLean

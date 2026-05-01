@@ -1,5 +1,20 @@
--- CapLean/AgentOp.lean
 namespace CapLean
+
+/-!
+## AgentOp — Operation Vocabulary
+
+**Purpose:** Defines the alphabet of effectful actions an agent can perform.
+
+**Key definitions:**
+- `FilePath`, `Cmd`, `PkgName`, `URL`, `CodeSnippet` — string aliases for op arguments
+- `AgentOp` — inductive type listing every op (readFile, writeFile, execShell,
+  evalCode, installPkg, networkCall, explicitApprove)
+
+**Key theorems:** none — pure data declarations.
+
+**Assumptions:** `FilePath` is currently `String`; path normalization happens
+later in `Sandbox.normalizePath`.
+-/
 
 /-- A normalised file path (wrapper for safety later) -/
 abbrev FilePath := String

@@ -1,5 +1,28 @@
 import Check.TraceJSON
 
+/-!
+## Check.Main — CLI Trace Verifier
+
+**Purpose:** Command-line entry point. Reads an externally-produced trace
+(JSONL) and a policy config (JSON), then runs all three safety layers
+against them. Exit code is 0 on pass, 1 on policy violation, 2 on parse error.
+
+**Usage:**
+```
+caplean-check --trace TRACE.jsonl --config CONFIG.json
+```
+Defaults: `/tmp/caplean_trace.jsonl`, `/tmp/caplean_config.json`.
+
+**Layers checked:**
+1. `enforceTrace` — every op within declared capability
+2. `effectTraceWithinSandbox` on `canonicalEffects` — no opaque-bound trust assumption
+3. `traceInstallsSafe` — every install meets the trust floor or is explicitly approved
+
+**Assumptions:** Layer 2 here is intentionally conservative — it uses
+`canonicalEffects` only, so `evalCode` / `execShell` contribute no extra
+effects. A stricter check (with `OpaqueBound`) is the caller's job.
+-/
+
 open CapLean CapLean.Check
 
 def parseArgs (args : List String) : String × String :=
