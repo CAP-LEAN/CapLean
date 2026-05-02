@@ -58,6 +58,8 @@ sibling to the Lean repo, you can omit `env`.
 Drop `cursorrules.template.md` into the target workspace as `.cursorrules`
 (or merge its contents into the file you already have). Restart Cursor.
 
+**NOTE** : To take effect, the `.cursorrules` file must be placed in the root directory of your project. In `Cursor`: Look at the `Explorer sidebar on the left`. The very `first name` at the top of the list—the one that holds all the other folders—is your root directory.
+
 ## End-to-end test example
 
 In a Cursor chat, with the rules in place and `set_policy` called:
